@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>验证码管理</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+      background: #0f172a; color: #e2e8f0; padding: 24px; font-size: 14px;
+    }
+    .topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      max-width: 1100px; margin: 0 auto 20px;
+    }
+    .topbar h1 { font-size: 18px; color: #94a3b8; }
+    .topbar nav a {
+      color: #38bdf8; text-decoration: none; margin-left: 16px;
+    }
+    .topbar nav a.active { color: #e2e8f0; font-weight: 600; }
+    .stats {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px; max-width: 1100px; margin: 0 auto 20px;
+    }
+    .stat { background: #1e293b; border-radius: 10px; padding: 16px; text-align: center; }
+    .stat .num { font-size: 26px; font-weight: 700; color: #38bdf8; }
+    .stat .lbl { color: #94a3b8; margin-top: 4px; }
+    .panel { background: #1e293b; border-radius: 10px; padding: 20px; max-width: 1100px; margin: 0 auto; }
+    .create { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 20px; }
+    .create input {
+      padding: 10px 12px; border-radius: 8px; border: 1px solid #334155;
+      background: #0f172a; color: #e2e8f0; font-size: 14px;
+    }
+    .create input[type="text"] { flex: 1; min-width: 200px; }
+    .create input[type="datetime-local"] { color-scheme: dark; }
+    button {
+      padding: 10px 16px; border: none; border-radius: 8px; cursor: pointer;
+      font-size: 14px; background: #0284c7; color: #fff;
+    }
+    button:hover { opacity: .9; }
+    button.ghost { background: transparent; border: 1px solid #475569; color: #cbd5e1; }
+    button.danger { background: #dc2626; }
+    button.small { padding: 5px 10px; font-size: 12px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid #334155; vertical-align: middle; }
+    th { color: #94a3b8; font-weight: 500; white-space: nowrap; }
+    td.code { font-family: "Consolas", monospace; font-size: 15px; color: #7dd3fc; white-space: nowrap; }
+    .badge { padding: 2px 8px; border-radius: 20px; font-size: 12px; white-space: nowrap; }
+    .badge.active { background: #14532d; color: #4ade80; }
+    .badge.revoked { background: #7f1d1d; color: #f87171; }
+    .badge.expired { background: #78350f; color: #fbbf24; }
+    .badge.bound { background: #1e3a8a; color: #60a5fa; }
+    .actions { display: flex; gap: 6px; white-space: nowrap; }
+    .none { color: #64748b; text-align: center; padding: 30px; }
+    .status-badge { font-size: 12px; color: #94a3b8; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <h1>验证码管理</h1>
+    <nav>
+      <a href="/" class="active">验证码</a>
+      <a href="/logs.html">日志</a>
+      <a href="#" id="logout">退出</a>
+    </nav>
+  </div>
+
+  <div class="stats" id="stats"></div>
+
+  <div class="panel">
+    <div class="create">
+      <input type="text" id="remark" placeholder="备注 (用户名/渠道, 可选)">
+      <label style="display:flex;align-items:center;gap:6px;color:#94a3b8;white-space:nowrap">
+        <input type="checkbox" id="permanent" checked>永久有效
+      </label>
+      <input type="datetime-local" id="expires" title="过期时间" disabled>
+      <button id="gen">生成验证码</button>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>验证码</th>
+          <th>备注</th>
+          <th>状态</th>
+          <th>设备绑定</th>
+          <th>有效期</th>
+          <th>校验次数</th>
+          <th>最近校验</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="none" id="empty" style="display:none">暂无验证码,点击上方按钮生成</div>
+  </div>
+
+  <script src="/app.js"></script>
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    function fmtTime(iso) {
+      if (!iso) return '<span class="status-badge">—</span>';
+      const d = new Date(iso);
+      return isNaN(d) ? iso : d.toLocaleString('zh-CN', { hour12: false });
+    }
+
+    function fmtExpiry(iso) {
+      if (!iso) return '<span class="badge active">永久</span>';
+      const d = new Date(iso);
+      return isNaN(d) ? iso : d.toLocaleString('zh-CN', { hour12: false });
+    }
+
+    function isExpired(row) {
+      return row.expires_at && new Date(row.expires_at).getTime() < Date.now();
+    }
+
+    function statusBadge(row) {
+      if (row.status === 'revoked') return '<span class="badge revoked">已取消</span>';
+      if (isExpired(row)) return '<span class="badge expired">已过期</span>';
+      return '<span class="badge active">有效</span>';
+    }
+
+    async function load() {
+      const [stats, keys] = await Promise.all([api('/api/admin/stats'), api('/api/admin/keys')]);
+      const s = stats.data;
+      $('stats').innerHTML = `
+        <div class="stat"><div class="num">${s.total}</div><div class="lbl">总数</div></div>
+        <div class="stat"><div class="num" style="color:#4ade80">${s.active}</div><div class="lbl">有效</div></div>
+        <div class="stat"><div class="num" style="color:#f87171">${s.revoked}</div><div class="lbl">已取消</div></div>
+        <div class="stat"><div class="num" style="color:#60a5fa">${s.bound}</div><div class="lbl">已绑定设备</div></div>
+        <div class="stat"><div class="num">${s.checks}</div><div class="lbl">总校验</div></div>
+        <div class="stat"><div class="num" style="color:#4ade80">${s.okChecks}</div><div class="lbl">通过</div></div>
+      `;
+      render(keys.data);
+    }
+
+    function render(rows) {
+      const tb = $('rows');
+      $('empty').style.display = rows.length ? 'none' : 'block';
+      tb.innerHTML = rows.map((r) => {
+        const dev = r.device_id
+          ? `<span class="badge bound">${escapeHtml(r.device_id)}</span>`
+          : '<span class="status-badge">未绑定</span>';
+        const actions = r.status === 'active'
+          ? `<button class="small danger" onclick="revoke(${r.id})">取消</button>`
+          : `<button class="small" onclick="restore(${r.id})">恢复</button>`;
+        return `<tr>
+          <td class="code">${escapeHtml(r.key)}</td>
+          <td>${escapeHtml(r.remark) || '<span class="status-badge">—</span>'}</td>
+          <td>${statusBadge(r)}</td>
+          <td>${dev}</td>
+          <td>${fmtExpiry(r.expires_at)}</td>
+          <td>${r.log_count}</td>
+          <td>${fmtTime(r.last_seen)}</td>
+          <td class="actions">${actions}<button class="small danger" onclick="del(${r.id})">删除</button></td>
+        </tr>`;
+      }).join('');
+    }
+
+    window.revoke = async (id) => {
+      if (!confirm('确定取消该验证码?用户将无法再使用')) return;
+      await api(`/api/admin/keys/${id}`, 'PATCH', { status: 'revoked' });
+      load();
+    };
+    window.restore = async (id) => {
+      await api(`/api/admin/keys/${id}`, 'PATCH', { status: 'active' });
+      load();
+    };
+    window.del = async (id) => {
+      if (!confirm('确定删除该验证码?此操作不可恢复')) return;
+      await api(`/api/admin/keys/${id}`, 'DELETE');
+      load();
+    };
+
+    $('permanent').addEventListener('change', () => {
+      $('expires').disabled = $('permanent').checked;
+      if ($('permanent').checked) $('expires').value = '';
+    });
+
+    $('gen').addEventListener('click', async () => {
+      const remark = $('remark').value.trim();
+      const raw = $('expires').value;
+      const body = {};
+      if (remark) body.remark = remark;
+      if (!document.getElementById('permanent').checked && raw) {
+        body.expires_at = new Date(raw).toISOString();
+      }
+      await api('/api/admin/keys', 'POST', body);
+      $('remark').value = '';
+      $('expires').value = '';
+      load();
+    });
+
+    $('logout').addEventListener('click', async (e) => {
+      e.preventDefault();
+      await api('/api/admin/logout', 'POST', {});
+      location.href = '/login.html';
+    });
+
+    load();
+  </script>
+</body>
+</html>

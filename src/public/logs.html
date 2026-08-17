@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>校验日志</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+      background: #0f172a; color: #e2e8f0; padding: 24px; font-size: 14px;
+    }
+    .topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      max-width: 1100px; margin: 0 auto 20px;
+    }
+    .topbar h1 { font-size: 18px; color: #94a3b8; }
+    .topbar nav a { color: #38bdf8; text-decoration: none; margin-left: 16px; }
+    .topbar nav a.active { color: #e2e8f0; font-weight: 600; }
+    .panel { background: #1e293b; border-radius: 10px; padding: 20px; max-width: 1100px; margin: 0 auto; }
+    .filters { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+    .filters input, .filters select {
+      padding: 9px 12px; border-radius: 8px; border: 1px solid #334155;
+      background: #0f172a; color: #e2e8f0; font-size: 13px;
+    }
+    .filters input { width: 200px; }
+    button { padding: 9px 16px; border: none; border-radius: 8px; cursor: pointer; background: #0284c7; color: #fff; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid #334155; }
+    th { color: #94a3b8; font-weight: 500; white-space: nowrap; }
+    td { word-break: break-all; }
+    .ok { color: #4ade80; font-weight: 600; }
+    .fail { color: #f87171; font-weight: 600; }
+    .none { color: #64748b; text-align: center; padding: 30px; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <h1>校验日志</h1>
+    <nav>
+      <a href="/">验证码</a>
+      <a href="/logs.html" class="active">日志</a>
+      <a href="#" id="logout">退出</a>
+    </nav>
+  </div>
+
+  <div class="panel">
+    <div class="filters">
+      <input type="text" id="f-key" placeholder="按验证码筛选">
+      <input type="text" id="f-ip" placeholder="按 IP 筛选">
+      <select id="f-result">
+        <option value="">全部结果</option>
+        <option value="ok">通过 (ok)</option>
+        <option value="INVALID_KEY">无效码</option>
+        <option value="REVOKED">已取消</option>
+        <option value="EXPIRED">已过期</option>
+        <option value="DEVICE_MISMATCH">设备不匹配</option>
+        <option value="RATE_LIMITED">限流</option>
+        <option value="BAD_REQUEST">参数错误</option>
+      </select>
+      <button onclick="load()">查询</button>
+    </div>
+    <table>
+      <thead>
+        <tr><th>时间</th><th>验证码</th><th>IP</th><th>设备</th><th>结果</th><th>说明</th></tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="none" id="empty" style="display:none">暂无日志</div>
+  </div>
+
+  <script src="/app.js"></script>
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    const RESULT_LABEL = {
+      ok: '通过', INVALID_KEY: '无效码', REVOKED: '已取消', EXPIRED: '已过期',
+      DEVICE_MISMATCH: '设备不匹配', RATE_LIMITED: '限流', BAD_REQUEST: '参数错误',
+    };
+
+    async function load() {
+      const params = new URLSearchParams();
+      if ($('f-key').value) params.set('key', $('f-key').value.trim());
+      if ($('f-ip').value) params.set('ip', $('f-ip').value.trim());
+      if ($('f-result').value) params.set('result', $('f-result').value);
+      params.set('limit', '300');
+      const j = await api(`/api/admin/logs?${params}`);
+      render(j.data);
+    }
+
+    function render(rows) {
+      const tb = $('rows');
+      $('empty').style.display = rows.length ? 'none' : 'block';
+      tb.innerHTML = rows.map((r) => {
+        const cls = r.result === 'ok' ? 'ok' : 'fail';
+        return `<tr>
+          <td>${new Date(r.created_at + 'Z').toLocaleString('zh-CN', { hour12: false })}</td>
+          <td class="code" style="font-family:Consolas,monospace;color:#7dd3fc">${escapeHtml(r.key)}</td>
+          <td>${escapeHtml(r.ip)}</td>
+          <td style="color:#94a3b8">${escapeHtml(r.device_id) || '—'}</td>
+          <td class="${cls}">${RESULT_LABEL[r.result] || escapeHtml(r.result)}</td>
+          <td style="color:#94a3b8">${escapeHtml(r.message)}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    $('logout').addEventListener('click', async (e) => {
+      e.preventDefault();
+      await api('/api/admin/logout', 'POST', {});
+      location.href = '/login.html';
+    });
+
+    load();
+  </script>
+</body>
+</html>
