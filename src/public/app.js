@@ -20,3 +20,11 @@ function escapeHtml(s) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
+
+function fmtShanghai(iso) {
+  if (!iso) return '';
+  const hasTz = /[Zz]$|[+-]\d{2}:\d{2}$/.test(iso.trim());
+  const d = new Date(hasTz ? iso : iso.replace(' ', 'T') + 'Z');
+  if (isNaN(d)) return iso;
+  return d.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false });
+}

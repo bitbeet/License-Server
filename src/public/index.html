@@ -100,15 +100,12 @@
     const $ = (id) => document.getElementById(id);
 
     function fmtTime(iso) {
-      if (!iso) return '<span class="status-badge">—</span>';
-      const d = new Date(iso);
-      return isNaN(d) ? iso : d.toLocaleString('zh-CN', { hour12: false });
+      return fmtShanghai(iso) || '<span class="status-badge">—</span>';
     }
 
     function fmtExpiry(iso) {
       if (!iso) return '<span class="badge active">永久</span>';
-      const d = new Date(iso);
-      return isNaN(d) ? iso : d.toLocaleString('zh-CN', { hour12: false });
+      return fmtShanghai(iso);
     }
 
     function isExpired(row) {

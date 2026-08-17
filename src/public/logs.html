@@ -94,7 +94,7 @@
       tb.innerHTML = rows.map((r) => {
         const cls = r.result === 'ok' ? 'ok' : 'fail';
         return `<tr>
-          <td>${new Date(r.created_at + 'Z').toLocaleString('zh-CN', { hour12: false })}</td>
+          <td>${fmtShanghai(r.created_at)}</td>
           <td class="code" style="font-family:Consolas,monospace;color:#7dd3fc">${escapeHtml(r.key)}</td>
           <td>${escapeHtml(r.ip)}</td>
           <td style="color:#94a3b8">${escapeHtml(r.device_id) || '—'}</td>
