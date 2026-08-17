@@ -74,13 +74,6 @@ location / {
 
 校验逻辑案例:**每次打开软件都向本服务校验一次激活码**,通过才放行;第一次打开弹窗填码(只显示成功 / 失败),之后未过期就静默校验不再弹窗;过期 / 被取消提示联系作者;断网无法绕过。
 
-客户端只需改一个地址即可部署使用(详见 [docs/client.md](docs/client.md)):
-
-```ts
-export const LICENSE_SERVER_URL = 'https://你的域名'
-export const CONTACT_AUTHOR = ''   // 可选,联系作者方式
-```
-
 ## 校验接口
 
 ```
@@ -155,7 +148,7 @@ async function checkLicense(key, deviceId) {
 }
 ```
 
-完整接口说明见 [docs/api.md](docs/api.md),通用软件接入见 [docs/integration.md](docs/integration.md),部署细节见 [docs/deploy.md](docs/deploy.md),桌面客户端接入见 [docs/client.md](docs/client.md)。
+完整接口说明见 [docs/api.md](docs/api.md),通用软件接入见 [docs/integration.md](docs/integration.md),部署细节见 [docs/deploy.md](docs/deploy.md)。
 
 ## 常见操作
 
