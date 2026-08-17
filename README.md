@@ -68,6 +68,20 @@ location / {
 - **验证码页**:一键生成验证码,填备注(用户名)、选"永久有效"或指定到期时间;随时取消 / 恢复 / 删除;顶部有统计数据,"最近校验"列即用户最后一次打开软件的时间
 - **日志页**:按验证码 / IP / 结果筛选所有校验记录,追踪每个用户的使用情况
 
+## 客户端接入
+
+任何自制软件(桌面 / 移动 / 脚本)接入方式见 **[docs/integration.md](docs/integration.md)** —— 语言无关的通用接入指南,含完整流程、规则、多语言代码示例与自测清单。
+
+本项目自带的桌面音乐客户端已内置校验逻辑:**每次打开软件都向本服务校验一次激活码**,通过才放行;第一次打开弹窗填码(只显示成功 / 失败),之后未过期就静默校验不再弹窗;过期 / 被取消提示联系作者;断网无法绕过。
+
+客户端只需改一个地址即可部署使用(详见 [docs/client.md](docs/client.md)):
+
+```ts
+// src/main/modules/license/config.ts
+export const LICENSE_SERVER_URL = 'https://你的域名'
+export const CONTACT_AUTHOR = ''   // 可选,联系作者方式
+```
+
 ## 校验接口
 
 ```
@@ -142,7 +156,7 @@ async function checkLicense(key, deviceId) {
 }
 ```
 
-完整接口说明见 [docs/api.md](docs/api.md),部署细节见 [docs/deploy.md](docs/deploy.md)。
+完整接口说明见 [docs/api.md](docs/api.md),通用软件接入见 [docs/integration.md](docs/integration.md),部署细节见 [docs/deploy.md](docs/deploy.md),桌面客户端接入见 [docs/client.md](docs/client.md)。
 
 ## 常见操作
 
