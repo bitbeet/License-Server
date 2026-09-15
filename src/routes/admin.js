@@ -228,6 +228,16 @@ router.get('/announcements', auth.requireAuth, (req, res) => {
   res.json({ ok: true, data: rows });
 });
 
+// 结束公告:不再对用户可见,但保留记录可查看
+router.post('/announcements/:id/end', auth.requireAuth, (req, res) => {
+  const id = Number(req.params.id);
+  const row = db.prepare('SELECT * FROM announcements WHERE id = ?').get(id);
+  if (!row) return res.status(404).json({ ok: false, error: 'NOT_FOUND', message: '公告不存在' });
+  if (row.ended_at) return res.json({ ok: true, data: row });
+  db.prepare('UPDATE announcements SET ended_at = ? WHERE id = ?').run(new Date().toISOString(), id);
+  res.json({ ok: true, data: db.prepare('SELECT * FROM announcements WHERE id = ?').get(id) });
+});
+
 router.delete('/announcements/:id', auth.requireAuth, (req, res) => {
   const id = Number(req.params.id);
   const info = db.transaction(() => {

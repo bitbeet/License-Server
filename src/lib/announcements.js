@@ -10,6 +10,7 @@ function visibleFor(deviceId) {
       `SELECT a.id, a.content, a.link_url, a.target_type, a.publish_at
        FROM announcements a
        WHERE a.publish_at <= ?
+         AND a.ended_at IS NULL
          AND (a.target_type = 'all'
               OR EXISTS (
                 SELECT 1 FROM announcement_targets t

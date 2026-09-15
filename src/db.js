@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS announcements (
   target_type   TEXT NOT NULL DEFAULT 'all',       -- all | device
   target_device TEXT NOT NULL DEFAULT '',          -- 旧字段,单设备;已由 targets 表取代
   publish_at    TEXT NOT NULL,                     -- ISO UTC,到点后客户端可见(定时发送)
+  ended_at      TEXT,                              -- 结束时间;非空表示已结束,不再对用户可见
   created_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -65,6 +66,11 @@ CREATE INDEX IF NOT EXISTS idx_logs_ip ON logs(ip);
 const cols = db.prepare('PRAGMA table_info(keys)').all();
 if (!cols.some((c) => c.name === 'last_seen')) {
   db.exec(`ALTER TABLE keys ADD COLUMN last_seen TEXT`);
+}
+
+const annCols = db.prepare('PRAGMA table_info(announcements)').all();
+if (!annCols.some((c) => c.name === 'ended_at')) {
+  db.exec(`ALTER TABLE announcements ADD COLUMN ended_at TEXT`);
 }
 
 // 旧的单设备定向公告迁移到 targets 表

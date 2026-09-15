@@ -55,9 +55,11 @@
     .badge { padding: 2px 8px; border-radius: 20px; font-size: 12px; white-space: nowrap; }
     .badge.published { background: #14532d; color: #4ade80; }
     .badge.scheduled { background: #78350f; color: #fbbf24; }
+    .badge.ended { background: #334155; color: #94a3b8; }
     .badge.all { background: #1e3a8a; color: #60a5fa; }
     .badge.device { background: #3b0764; color: #c084fc; }
     .link-cell a { color: #38bdf8; word-break: break-all; }
+    .actions { display: flex; gap: 6px; white-space: nowrap; }
     .none { color: #64748b; text-align: center; padding: 30px; }
     .hint { color: #64748b; font-size: 12px; margin-top: 4px; }
   </style>
@@ -173,9 +175,11 @@
         const target = r.target_type === 'all'
           ? '<span class="badge all">全体</span>'
           : `<span class="badge device">${escapeHtml((r.target_devices || []).join('、') || r.target_device || '—')}</span>`;
-        const status = isPublished(r)
-          ? '<span class="badge published">已发布</span>'
-          : '<span class="badge scheduled">定时中</span>';
+        const status = r.ended_at
+          ? '<span class="badge ended">已结束</span>'
+          : isPublished(r)
+            ? '<span class="badge published">已发布</span>'
+            : '<span class="badge scheduled">定时中</span>';
         const link = r.link_url
           ? `<a href="${escapeHtml(r.link_url)}" target="_blank" rel="noopener">${escapeHtml(r.link_url)}</a>`
           : '<span style="color:#64748b">—</span>';
@@ -187,10 +191,19 @@
           <td>${status}</td>
           <td>${fmtShanghai(r.publish_at)}</td>
           <td>${fmtShanghai(r.created_at)}</td>
-          <td><button class="small danger" onclick="del(${r.id})">删除</button></td>
+          <td class="actions">
+            ${r.ended_at ? '' : `<button class="small" onclick="end(${r.id})">结束</button>`}
+            <button class="small danger" onclick="del(${r.id})">删除</button>
+          </td>
         </tr>`;
       }).join('');
     }
+
+    window.end = async (id) => {
+      if (!confirm('确定结束该公告?结束后用户将不再看到它,但记录仍保留在列表中')) return;
+      await api(`/api/admin/announcements/${id}/end`, 'POST');
+      load();
+    };
 
     window.del = async (id) => {
       if (!confirm('确定删除该公告?已收到公告的用户不受影响,但新用户将不再看到')) return;
