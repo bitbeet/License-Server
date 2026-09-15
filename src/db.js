@@ -36,7 +36,27 @@ CREATE TABLE IF NOT EXISTS logs (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS announcements (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  content       TEXT NOT NULL,
+  link_url      TEXT NOT NULL DEFAULT '',          -- 可选,客户端用默认浏览器打开
+  target_type   TEXT NOT NULL DEFAULT 'all',       -- all | device
+  target_device TEXT NOT NULL DEFAULT '',          -- 旧字段,单设备;已由 targets 表取代
+  publish_at    TEXT NOT NULL,                     -- ISO UTC,到点后客户端可见(定时发送)
+  created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS announcement_targets (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  announcement_id INTEGER NOT NULL REFERENCES announcements(id) ON DELETE CASCADE,
+  device_id      TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_keys_status ON keys(status);
+CREATE INDEX IF NOT EXISTS idx_ann_publish ON announcements(publish_at);
+CREATE INDEX IF NOT EXISTS idx_ann_target ON announcements(target_type, target_device);
+CREATE INDEX IF NOT EXISTS idx_ann_tg_ann ON announcement_targets(announcement_id);
+CREATE INDEX IF NOT EXISTS idx_ann_tg_dev ON announcement_targets(device_id);
 CREATE INDEX IF NOT EXISTS idx_logs_key ON logs(key);
 CREATE INDEX IF NOT EXISTS idx_logs_created ON logs(created_at);
 CREATE INDEX IF NOT EXISTS idx_logs_ip ON logs(ip);
@@ -46,5 +66,13 @@ const cols = db.prepare('PRAGMA table_info(keys)').all();
 if (!cols.some((c) => c.name === 'last_seen')) {
   db.exec(`ALTER TABLE keys ADD COLUMN last_seen TEXT`);
 }
+
+// 旧的单设备定向公告迁移到 targets 表
+db.exec(
+  `INSERT INTO announcement_targets (announcement_id, device_id)
+   SELECT id, target_device FROM announcements
+   WHERE target_type = 'device' AND target_device != ''
+     AND id NOT IN (SELECT announcement_id FROM announcement_targets)`
+);
 
 module.exports = db;

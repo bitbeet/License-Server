@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>公告管理</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+      background: #0f172a; color: #e2e8f0; padding: 24px; font-size: 14px;
+    }
+    .topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      max-width: 1100px; margin: 0 auto 20px;
+    }
+    .topbar h1 { font-size: 18px; color: #94a3b8; }
+    .topbar nav a { color: #38bdf8; text-decoration: none; margin-left: 16px; }
+    .topbar nav a.active { color: #e2e8f0; font-weight: 600; }
+    .panel { background: #1e293b; border-radius: 10px; padding: 20px; max-width: 1100px; margin: 0 auto; }
+    .panel + .panel { margin-top: 20px; }
+    .panel h2 { font-size: 15px; color: #94a3b8; margin-bottom: 14px; }
+    .form-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+    .form-row label { color: #94a3b8; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
+    .device-box {
+      border: 1px solid #334155; border-radius: 8px; background: #0f172a;
+      max-height: 180px; overflow-y: auto; padding: 8px 10px; min-width: 320px;
+    }
+    .device-box label.dev {
+      display: flex; align-items: center; gap: 8px; padding: 4px 2px; color: #e2e8f0; cursor: pointer;
+    }
+    .device-box .dev-id { font-family: Consolas, monospace; font-size: 13px; color: #7dd3fc; }
+    .device-box .dev-remark { color: #94a3b8; font-size: 12px; }
+    .device-box .dev-seen { color: #64748b; font-size: 12px; margin-left: auto; white-space: nowrap; }
+    .device-empty { color: #64748b; font-size: 12px; padding: 6px 2px; }
+    input[type="text"], textarea, select {
+      padding: 10px 12px; border-radius: 8px; border: 1px solid #334155;
+      background: #0f172a; color: #e2e8f0; font-size: 14px;
+      font-family: inherit;
+    }
+    input[type="text"] { flex: 1; min-width: 200px; }
+    textarea { width: 100%; min-height: 80px; resize: vertical; }
+    input[type="datetime-local"] { color-scheme: dark; padding: 9px 12px; border-radius: 8px; border: 1px solid #334155; background: #0f172a; color: #e2e8f0; }
+    button {
+      padding: 10px 16px; border: none; border-radius: 8px; cursor: pointer;
+      font-size: 14px; background: #0284c7; color: #fff;
+    }
+    button:hover { opacity: .9; }
+    button.small { padding: 5px 10px; font-size: 12px; }
+    button.danger { background: #dc2626; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid #334155; vertical-align: top; }
+    th { color: #94a3b8; font-weight: 500; white-space: nowrap; }
+    td.content-cell { max-width: 360px; word-break: break-all; white-space: pre-wrap; }
+    .badge { padding: 2px 8px; border-radius: 20px; font-size: 12px; white-space: nowrap; }
+    .badge.published { background: #14532d; color: #4ade80; }
+    .badge.scheduled { background: #78350f; color: #fbbf24; }
+    .badge.all { background: #1e3a8a; color: #60a5fa; }
+    .badge.device { background: #3b0764; color: #c084fc; }
+    .link-cell a { color: #38bdf8; word-break: break-all; }
+    .none { color: #64748b; text-align: center; padding: 30px; }
+    .hint { color: #64748b; font-size: 12px; margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <h1>公告管理</h1>
+    <nav>
+      <a href="/">验证码</a>
+      <a href="/announcements.html" class="active">公告</a>
+      <a href="/logs.html">日志</a>
+      <a href="#" id="logout">退出</a>
+    </nav>
+  </div>
+
+  <div class="panel">
+    <h2>发布公告</h2>
+    <div class="form-row">
+      <textarea id="content" placeholder="公告内容 (纯文本, 软件端展示)"></textarea>
+    </div>
+    <div class="form-row">
+      <input type="text" id="link" placeholder="附带链接 (可选, 用户点击后用默认浏览器打开, 如 https://example.com/update">
+    </div>
+    <div class="form-row">
+      <label>发送对象
+        <select id="target-type">
+          <option value="all">全体用户</option>
+          <option value="device">指定机器码 (可多选)</option>
+        </select>
+      </label>
+      <label id="dev-all-label" style="display:none"><input type="checkbox" id="dev-all">全选</label>
+      <div class="device-box" id="device-box" style="display:none"></div>
+      <label><input type="radio" name="send-time" value="now" checked>即刻发送</label>
+      <label><input type="radio" name="send-time" value="later">定时发送</label>
+      <input type="datetime-local" id="publish-at" disabled>
+    </div>
+    <div class="form-row">
+      <button id="publish">发布公告</button>
+      <span class="hint">发送对象来自已绑定过设备的验证码(机器码 + 备注);定时时间按北京时间 (Asia/Shanghai) 计算,公告到点后用户软件下次启动/拉取时可见。</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>公告列表</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th><th>内容</th><th>链接</th><th>对象</th><th>状态</th><th>发布时间</th><th>创建时间</th><th>操作</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="none" id="empty" style="display:none">暂无公告</div>
+  </div>
+
+  <script src="/app.js"></script>
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    function isPublished(row) {
+      return new Date(row.publish_at).getTime() <= Date.now();
+    }
+
+    // datetime-local 的值按北京时间 (+08:00) 解释, 转 ISO UTC
+    function shanghaiToIso(value) {
+      if (!value) return null;
+      const v = value.length === 16 ? value + ':00' : value;
+      const d = new Date(v + '+08:00');
+      if (isNaN(d)) return null;
+      return d.toISOString();
+    }
+
+    let deviceRows = [];
+
+    async function loadDevices() {
+      const j = await api('/api/admin/devices');
+      deviceRows = j.data;
+      const box = $('device-box');
+      if (!deviceRows.length) {
+        box.innerHTML = '<div class="device-empty">还没有用户绑定设备,暂时无法定向发送</div>';
+        return;
+      }
+      box.innerHTML = deviceRows
+        .map((d, i) => {
+          const label = d.remark
+            ? `<span class="dev-remark">${escapeHtml(d.remark)}</span>`
+            : `<span class="dev-remark" style="color:#64748b">无备注</span>`;
+          return `<label class="dev">
+            <input type="checkbox" class="dev-check" data-idx="${i}">
+            <span class="dev-id">${escapeHtml(d.device_id)}</span>
+            ${label}
+            <span class="dev-seen">${fmtShanghai(d.last_seen)}</span>
+          </label>`;
+        })
+        .join('');
+      box.querySelectorAll('.dev-check').forEach((cb) => {
+        cb.addEventListener('change', () => {
+          $('dev-all').checked = [...box.querySelectorAll('.dev-check')].every((c) => c.checked);
+        });
+      });
+    }
+
+    function checkedDevices() {
+      return [...$('device-box').querySelectorAll('.dev-check:checked')]
+        .map((cb) => deviceRows[Number(cb.dataset.idx)].device_id);
+    }
+
+    async function load() {
+      const j = await api('/api/admin/announcements');
+      const rows = j.data;
+      $('empty').style.display = rows.length ? 'none' : 'block';
+      $('rows').innerHTML = rows.map((r) => {
+        const target = r.target_type === 'all'
+          ? '<span class="badge all">全体</span>'
+          : `<span class="badge device">${escapeHtml((r.target_devices || []).join('、') || r.target_device || '—')}</span>`;
+        const status = isPublished(r)
+          ? '<span class="badge published">已发布</span>'
+          : '<span class="badge scheduled">定时中</span>';
+        const link = r.link_url
+          ? `<a href="${escapeHtml(r.link_url)}" target="_blank" rel="noopener">${escapeHtml(r.link_url)}</a>`
+          : '<span style="color:#64748b">—</span>';
+        return `<tr>
+          <td>${r.id}</td>
+          <td class="content-cell">${escapeHtml(r.content)}</td>
+          <td class="link-cell">${link}</td>
+          <td>${target}</td>
+          <td>${status}</td>
+          <td>${fmtShanghai(r.publish_at)}</td>
+          <td>${fmtShanghai(r.created_at)}</td>
+          <td><button class="small danger" onclick="del(${r.id})">删除</button></td>
+        </tr>`;
+      }).join('');
+    }
+
+    window.del = async (id) => {
+      if (!confirm('确定删除该公告?已收到公告的用户不受影响,但新用户将不再看到')) return;
+      await api(`/api/admin/announcements/${id}`, 'DELETE');
+      load();
+    };
+
+    $('target-type').addEventListener('change', () => {
+      const isDevice = $('target-type').value === 'device';
+      $('device-box').style.display = isDevice ? '' : 'none';
+      $('dev-all-label').style.display = isDevice ? '' : 'none';
+    });
+
+    $('dev-all').addEventListener('change', () => {
+      const checked = $('dev-all').checked;
+      $('device-box').querySelectorAll('.dev-check').forEach((cb) => { cb.checked = checked; });
+    });
+
+    document.querySelectorAll('input[name="send-time"]').forEach((el) => {
+      el.addEventListener('change', () => {
+        $('publish-at').disabled = document.querySelector('input[name="send-time"]:checked').value === 'now';
+      });
+    });
+
+    $('publish').addEventListener('click', async () => {
+      const content = $('content').value.trim();
+      if (!content) return alert('公告内容不能为空');
+      const body = {
+        content,
+        link_url: $('link').value.trim(),
+        target_type: $('target-type').value,
+      };
+      if (body.target_type === 'device') {
+        body.target_devices = checkedDevices();
+        if (!body.target_devices.length) return alert('指定用户时至少勾选一个机器码');
+      }
+      if (document.querySelector('input[name="send-time"]:checked').value === 'later') {
+        const iso = shanghaiToIso($('publish-at').value);
+        if (!iso) return alert('请选择有效的定时发布时间');
+        body.publish_at = iso;
+      }
+      await api('/api/admin/announcements', 'POST', body);
+      $('content').value = '';
+      $('link').value = '';
+      $('publish-at').value = '';
+      load();
+    });
+
+    $('logout').addEventListener('click', async (e) => {
+      e.preventDefault();
+      await api('/api/admin/logout', 'POST', {});
+      location.href = '/login.html';
+    });
+
+    load();
+    loadDevices();
+  </script>
+</body>
+</html>

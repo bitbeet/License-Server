@@ -214,3 +214,61 @@ static class License {
 - [ ] 后台把验证码设为过期 → 同上
 - [ ] 断网打开软件 → 提示无法连接,重试无效时只能退出,进不去软件
 - [ ] 同一个验证码在另一台设备用 → 拒绝
+
+## 九、在线公告(可选)
+
+管理员可在后台"公告"页发布在线公告,用户打开软件时随校验结果一起收到,无需更新软件本身。
+
+### 服务端给了什么
+
+校验通过的响应里多了一个 `announcements` 数组(也可以单独调 `GET /api/announcements?device_id=你的机器码` 刷新,见 api 文档):
+
+```json
+"announcements": [
+  {
+    "id": 1,
+    "content": "新版本 2.0 已发布,建议更新",
+    "link_url": "https://example.com/download",
+    "publish_at": "2026-09-15T10:00:00.000Z",
+    "target": "all"
+  }
+]
+```
+
+- `target: "all"` 是发给全体用户的;`target: "device"` 是只发给当前机器码的(靠校验时传的 `device_id` 区分用户)。
+- 管理员设置定时发送的公告,到点后才会出现在返回里;即刻发送的立即可见。
+
+### 软件端怎么展示
+
+公告是纯文本 + 一个可选链接字段,展示逻辑由软件端自己定(比如启动后弹出一个小窗口,或主界面顶部滚动一条):
+
+1. 取 `announcements` 数组,把每条 `content` 显示出来。
+2. 若 `link_url` 不为 `null`,放一个"点击查看"按钮/超链接,**点击时调用系统默认浏览器打开**,不要在软件内嵌浏览器加载。
+
+各语言用默认浏览器打开链接的方式:
+
+**C#**
+```csharp
+System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo {
+  FileName = linkUrl,
+  UseShellExecute = true   // 用系统默认浏览器打开
+});
+```
+
+**Python**
+```python
+import webbrowser
+webbrowser.open(link_url)
+```
+
+**Node.js / Electron**
+```javascript
+require('child_process').execFile('cmd', ['/c', 'start', '', linkUrl], { windowsHide: true });
+// 跨平台可用 npm 包 `open`: const { open } = require('open'); open(linkUrl);
+```
+
+### 接入建议
+
+- 公告接口失败(网络异常等)时**静默忽略即可**,公告是增值功能,不要因为它影响软件可用性。
+- 公告是纯文本下发,软件端直接按文本展示即可;如果要在软件里自动把内容中的网址变成可点击链接,由软件端做(用正则识别 URL),服务端不会下发 HTML,避免注入风险。
+- `id` 可用来去重:同一台设备上已展示过的公告 id 存本地,下次启动只展示新增的。

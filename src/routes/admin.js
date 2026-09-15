@@ -155,4 +155,89 @@ router.get('/stats', auth.requireAuth, (req, res) => {
   res.json({ ok: true, data: { total, active, revoked, bound, checks, okChecks } });
 });
 
+// ---------- 公告 ----------
+
+// 已绑定机器码列表,供公告定向选择
+router.get('/devices', auth.requireAuth, (req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT device_id, key, remark, last_seen FROM keys
+       WHERE device_id IS NOT NULL AND device_id != ''
+       ORDER BY last_seen DESC`
+    )
+    .all();
+  res.json({ ok: true, data: rows });
+});
+
+router.post('/announcements', auth.requireAuth, (req, res) => {
+  const body = req.body || {};
+  const content = typeof body.content === 'string' ? body.content.trim() : '';
+  const linkUrl = typeof body.link_url === 'string' ? body.link_url.trim() : '';
+  const targetType = body.target_type === 'device' ? 'device' : 'all';
+
+  // 批量勾选传 target_devices 数组;兼容旧的单个 target_device
+  let devices = [];
+  if (targetType === 'device') {
+    const raw = Array.isArray(body.target_devices) ? body.target_devices : [body.target_device];
+    devices = [...new Set(raw.filter((d) => typeof d === 'string' && d.trim()).map((d) => d.trim()))];
+    if (devices.length === 0) {
+      return res.status(400).json({ ok: false, error: 'BAD_REQUEST', message: '指定用户时至少勾选一个机器码' });
+    }
+  }
+  if (!content) {
+    return res.status(400).json({ ok: false, error: 'BAD_REQUEST', message: '公告内容不能为空' });
+  }
+  if (linkUrl && !/^https?:\/\//i.test(linkUrl)) {
+    return res.status(400).json({ ok: false, error: 'BAD_REQUEST', message: '链接必须以 http:// 或 https:// 开头' });
+  }
+
+  let publishAt = new Date().toISOString(); // 默认即刻发送
+  if (typeof body.publish_at === 'string' && body.publish_at) {
+    const t = new Date(body.publish_at).getTime();
+    if (Number.isNaN(t)) {
+      return res.status(400).json({ ok: false, error: 'BAD_REQUEST', message: 'publish_at 格式无效' });
+    }
+    publishAt = new Date(t).toISOString();
+  }
+
+  const insertAnn = db.prepare(
+    'INSERT INTO announcements (content, link_url, target_type, target_device, publish_at) VALUES (?, ?, ?, ?, ?)'
+  );
+  const insertTarget = db.prepare('INSERT INTO announcement_targets (announcement_id, device_id) VALUES (?, ?)');
+  let row;
+  db.transaction(() => {
+    row = insertAnn.run(content, linkUrl, targetType, '', publishAt);
+    const annId = row.lastInsertRowid;
+    for (const d of devices) insertTarget.run(annId, d);
+  })();
+
+  row = db.prepare('SELECT * FROM announcements WHERE id = ?').get(row.lastInsertRowid);
+  row.target_devices = devices;
+  res.json({ ok: true, data: row });
+});
+
+router.get('/announcements', auth.requireAuth, (req, res) => {
+  const rows = db.prepare('SELECT * FROM announcements ORDER BY id DESC').all();
+  const targets = db.prepare('SELECT announcement_id, device_id FROM announcement_targets').all();
+  const byAnn = new Map();
+  for (const t of targets) {
+    if (!byAnn.has(t.announcement_id)) byAnn.set(t.announcement_id, []);
+    byAnn.get(t.announcement_id).push(t.device_id);
+  }
+  for (const r of rows) r.target_devices = byAnn.get(r.id) || [];
+  res.json({ ok: true, data: rows });
+});
+
+router.delete('/announcements/:id', auth.requireAuth, (req, res) => {
+  const id = Number(req.params.id);
+  const info = db.transaction(() => {
+    db.prepare('DELETE FROM announcement_targets WHERE announcement_id = ?').run(id);
+    return db.prepare('DELETE FROM announcements WHERE id = ?').run(id);
+  })();
+  if (info.changes === 0) {
+    return res.status(404).json({ ok: false, error: 'NOT_FOUND', message: '公告不存在' });
+  }
+  res.json({ ok: true });
+});
+
 module.exports = router;

@@ -35,12 +35,21 @@ Content-Type: application/json
     "status": "active",
     "expires_at": "2026-12-31T00:00:00.000Z",
     "last_seen": "2026-08-17T12:00:00.000Z",
-    "server_time": "2026-08-17T12:00:00.000Z"
+    "server_time": "2026-08-17T12:00:00.000Z",
+    "announcements": [
+      {
+        "id": 1,
+        "content": "新版本 2.0 已发布,建议更新",
+        "link_url": "https://example.com/download",
+        "publish_at": "2026-09-15T02:00:00.000Z",
+        "target": "all"
+      }
+    ]
   }
 }
 ```
 
-> `expires_at` 为 `null` 表示永久有效;`last_seen` 为最近一次校验(打开软件)时间。
+> `expires_at` 为 `null` 表示永久有效;`last_seen` 为最近一次校验(打开软件)时间;`announcements` 为面向该机器码的在线公告(可能为空数组),详见下文"公告接口"。
 
 **校验失败** — HTTP 状态码恒为 200,通过 `ok` 字段区分(便于软件端统一处理)
 
@@ -70,6 +79,42 @@ GET https://你的域名/api/health
 ```json
 { "ok": true, "time": "2026-08-17T12:00:00.000Z" }
 ```
+
+## 公告接口
+
+管理员在后台发布公告(全体或指定机器码),软件端拉取后展示。
+
+```
+GET https://你的域名/api/announcements?device_id=PC-USER123
+```
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `device_id` | string | 建议 | 机器码;用于收到"指定用户"的公告,缺省只返回全体公告 |
+
+```json
+{
+  "ok": true,
+  "data": [
+    {
+      "id": 1,
+      "content": "新版本 2.0 已发布,建议更新",
+      "link_url": "https://example.com/download",
+      "publish_at": "2026-09-15T02:00:00.000Z",
+      "target": "all"
+    }
+  ]
+}
+```
+
+| 字段 | 说明 |
+|---|---|
+| `content` | 公告内容(纯文本) |
+| `link_url` | 附带链接,可能为 `null`;软件端点击时用系统默认浏览器打开 |
+| `publish_at` | 发布时间(北京时间 UTC+8) |
+| `target` | `all` = 全体公告;`device` = 发给当前机器码的公告 |
+
+> 只返回**已到发布时间**的公告:管理员设置定时发送后,到点才会出现在结果里。`POST /api/validate` 的成功响应中同样携带 `announcements` 字段,软件启动时随校验一起拿到,无需额外请求。
 
 ## 软件端判断逻辑示例
 

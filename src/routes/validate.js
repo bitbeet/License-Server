@@ -3,6 +3,7 @@
 const express = require('express');
 const db = require('../db');
 const rateLimit = require('../middleware/rateLimit');
+const { visibleFor } = require('../lib/announcements');
 
 const router = express.Router();
 
@@ -76,8 +77,15 @@ router.post('/validate', rateLimit, (req, res) => {
       expires_at: row.expires_at || null,
       last_seen: new Date().toISOString(),
       server_time: new Date().toISOString(),
+      announcements: visibleFor(deviceId),
     },
   });
+});
+
+// 公告拉取:软件启动时随校验一起拿到,也可以单独调用刷新
+router.get('/announcements', rateLimit, (req, res) => {
+  const deviceId = typeof req.query.device_id === 'string' ? req.query.device_id.trim() : '';
+  res.json({ ok: true, data: visibleFor(deviceId) });
 });
 
 router.get('/health', (req, res) => {
