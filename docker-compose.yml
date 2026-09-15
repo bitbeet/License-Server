@@ -8,7 +8,7 @@ services:
     environment:
       - PORT=8080
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:?请先复制 .env.example 为 .env 并设置 ADMIN_PASSWORD}
-      - RATE_LIMIT_MAX=30
+      - RATE_LIMIT_MAX=${RATE_LIMIT_MAX:-30}
       - DATA_DIR=/app/data
       - TZ=Asia/Shanghai
     volumes:
