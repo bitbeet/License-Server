@@ -159,7 +159,7 @@
         const dev = r.device_id
           ? `<span class="badge bound">${escapeHtml(r.device_id)}</span>`
           : '<span class="status-badge">未绑定</span>';
-        const actions = r.status === 'active'
+        let actions = r.status === 'active'
           ? `<button class="small danger" onclick="revoke(${r.id})">取消</button>`
           : `<button class="small" onclick="restore(${r.id})">恢复</button>`;
         actions += ` <button class="small" onclick="editRemark(${r.id})">改备注</button>`;
