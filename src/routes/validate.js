@@ -4,6 +4,8 @@ const express = require('express');
 const db = require('../db');
 const rateLimit = require('../middleware/rateLimit');
 const { visibleFor } = require('../lib/announcements');
+const { getSetting } = require('../lib/settings');
+const { generateKey } = require('../lib/keys');
 
 const router = express.Router();
 
@@ -86,6 +88,44 @@ router.post('/validate', rateLimit, (req, res) => {
 router.get('/announcements', rateLimit, (req, res) => {
   const deviceId = typeof req.query.device_id === 'string' ? req.query.device_id.trim() : '';
   res.json({ ok: true, data: visibleFor(deviceId) });
+});
+
+// 开放模式:新用户(还没有验证码)首次打开软件时自动分发一个验证码并绑定机器码
+router.post('/open/distribute', rateLimit, (req, res) => {
+  const deviceId = typeof (req.body || {}).device_id === 'string' ? req.body.device_id.trim() : '';
+  if (!deviceId) {
+    return res.status(400).json({ ok: false, error: 'BAD_REQUEST', message: '缺少 device_id 参数' });
+  }
+
+  if (getSetting('open_mode') !== '1') {
+    return res.json({ ok: false, error: 'OPEN_MODE_DISABLED', message: '开放模式未开启' });
+  }
+
+  // 该机器码已有验证码则原样返回(含已取消的,管理员取消依然生效),避免重复发码
+  const existing = db
+    .prepare('SELECT key FROM keys WHERE device_id = ? ORDER BY id DESC LIMIT 1')
+    .get(deviceId);
+  if (existing) {
+    logResult(existing.key, clientIp(req), deviceId, 'ok', '开放模式:机器码已有验证码,原样返回');
+    return res.json({ ok: true, data: { key: existing.key, device_id: deviceId } });
+  }
+
+  // 新机器码:创建验证码并直接绑定
+  let key = '';
+  for (let i = 0; i < 10; i++) {
+    const k = generateKey();
+    if (!db.prepare('SELECT 1 FROM keys WHERE key = ?').get(k)) {
+      key = k;
+      break;
+    }
+  }
+  if (!key) {
+    return res.status(500).json({ ok: false, error: 'INTERNAL', message: '无法生成唯一验证码' });
+  }
+  const remark = `开放模式自动分发 ${new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false })}`;
+  db.prepare('INSERT INTO keys (key, remark, device_id) VALUES (?, ?, ?)').run(key, remark, deviceId);
+  logResult(key, clientIp(req), deviceId, 'ok', '开放模式:自动分发验证码');
+  return res.json({ ok: true, data: { key, device_id: deviceId } });
 });
 
 router.get('/health', (req, res) => {

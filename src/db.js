@@ -53,6 +53,11 @@ CREATE TABLE IF NOT EXISTS announcement_targets (
   device_id      TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS settings (
+  key   TEXT PRIMARY KEY,
+  value TEXT
+);
+
 CREATE INDEX IF NOT EXISTS idx_keys_status ON keys(status);
 CREATE INDEX IF NOT EXISTS idx_ann_publish ON announcements(publish_at);
 CREATE INDEX IF NOT EXISTS idx_ann_target ON announcements(target_type, target_device);

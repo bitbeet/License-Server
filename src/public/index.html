@@ -34,6 +34,15 @@
     }
     .create input[type="text"] { flex: 1; min-width: 200px; }
     .create input[type="datetime-local"] { color-scheme: dark; }
+    .openbar {
+      display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+      background: #1e293b; border-radius: 10px; padding: 12px 20px;
+      max-width: 1100px; margin: 0 auto 20px;
+    }
+    .openbar .state { font-weight: 600; }
+    .openbar .state.on { color: #4ade80; }
+    .openbar .state.off { color: #94a3b8; }
+    .openbar .hint { color: #64748b; font-size: 12px; }
     button {
       padding: 10px 16px; border: none; border-radius: 8px; cursor: pointer;
       font-size: 14px; background: #0284c7; color: #fff;
@@ -65,6 +74,13 @@
       <a href="/logs.html">日志</a>
       <a href="#" id="logout">退出</a>
     </nav>
+  </div>
+
+  <div class="openbar">
+    <span>开放模式:</span>
+    <span class="state" id="open-state">加载中…</span>
+    <button id="open-toggle" disabled>切换</button>
+    <span class="hint">开启后,新用户首次打开软件无需输入验证码,自动分发并绑定(即刻生效);已分发过的机器码原样返回,取消/过期照常生效。</span>
   </div>
 
   <div class="stats" id="stats"></div>
@@ -133,7 +149,10 @@
       render(keys.data);
     }
 
+    let keysCache = [];
+
     function render(rows) {
+      keysCache = rows;
       const tb = $('rows');
       $('empty').style.display = rows.length ? 'none' : 'block';
       tb.innerHTML = rows.map((r) => {
@@ -143,6 +162,7 @@
         const actions = r.status === 'active'
           ? `<button class="small danger" onclick="revoke(${r.id})">取消</button>`
           : `<button class="small" onclick="restore(${r.id})">恢复</button>`;
+        actions += ` <button class="small" onclick="editRemark(${r.id})">改备注</button>`;
         return `<tr>
           <td class="code">${escapeHtml(r.key)}</td>
           <td>${escapeHtml(r.remark) || '<span class="status-badge">—</span>'}</td>
@@ -155,6 +175,14 @@
         </tr>`;
       }).join('');
     }
+
+    window.editRemark = async (id) => {
+      const row = keysCache.find((r) => r.id === id);
+      const remark = prompt('修改备注 (用户名/渠道):', row ? row.remark : '');
+      if (remark === null) return;
+      await api(`/api/admin/keys/${id}`, 'PATCH', { remark: remark.trim() });
+      load();
+    };
 
     window.revoke = async (id) => {
       if (!confirm('确定取消该验证码?用户将无法再使用')) return;
@@ -196,7 +224,25 @@
       location.href = '/login.html';
     });
 
+    // 开放模式开关
+    async function loadOpenMode() {
+      const j = await api('/api/admin/settings');
+      renderOpenMode(j.data.open_mode);
+      $('open-toggle').disabled = false;
+    }
+    function renderOpenMode(on) {
+      const el = $('open-state');
+      el.textContent = on ? '已开启' : '已关闭';
+      el.className = 'state ' + (on ? 'on' : 'off');
+      $('open-toggle').textContent = on ? '关闭' : '开启';
+    }
+    $('open-toggle').addEventListener('click', async () => {
+      const j = await api('/api/admin/settings', 'PATCH', { open_mode: $('open-state').textContent !== '已开启' });
+      renderOpenMode(j.data.open_mode);
+    });
+
     load();
+    loadOpenMode();
   </script>
 </body>
 </html>

@@ -4,6 +4,7 @@ const express = require('express');
 const db = require('../db');
 const { generateKey } = require('../lib/keys');
 const auth = require('../middleware/auth');
+const { getSetting, setSetting } = require('../lib/settings');
 
 const router = express.Router();
 
@@ -153,6 +154,20 @@ router.get('/stats', auth.requireAuth, (req, res) => {
   const checks = db.prepare('SELECT COUNT(*) AS n FROM logs').get().n;
   const okChecks = db.prepare("SELECT COUNT(*) AS n FROM logs WHERE result = 'ok'").get().n;
   res.json({ ok: true, data: { total, active, revoked, bound, checks, okChecks } });
+});
+
+// ---------- 设置 ----------
+
+router.get('/settings', auth.requireAuth, (req, res) => {
+  res.json({ ok: true, data: { open_mode: getSetting('open_mode') === '1' } });
+});
+
+router.patch('/settings', auth.requireAuth, (req, res) => {
+  const body = req.body || {};
+  if (typeof body.open_mode === 'boolean') {
+    setSetting('open_mode', body.open_mode ? '1' : '0');
+  }
+  res.json({ ok: true, data: { open_mode: getSetting('open_mode') === '1' } });
 });
 
 // ---------- 公告 ----------

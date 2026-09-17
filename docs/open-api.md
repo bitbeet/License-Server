@@ -123,7 +123,46 @@ GET /api/announcements?device_id=PC-USER123
 
 ---
 
-## 3. 健康检查(可用于软件端网络探测)
+## 3. 开放模式自动分发(可选,配合"开放模式"开关使用)
+
+管理员在后台开启"开放模式"后,软件端首次启动(本地没有验证码)时调用本接口,服务器自动创建一个验证码并绑定当前机器码,实现用户无感进入。
+
+```
+POST /api/open/distribute
+Content-Type: application/json
+```
+
+```json
+{ "device_id": "PC-USER123" }
+```
+
+### 成功响应
+
+```json
+{ "ok": true, "data": { "key": "K7QX9M-2WP4DZ-8RTH3C-VN5LSQ", "device_id": "PC-USER123" } }
+```
+
+### 失败响应(开放模式未开启时)
+
+```json
+{ "ok": false, "error": "OPEN_MODE_DISABLED", "message": "开放模式未开启" }
+```
+
+**软件端逻辑建议**:
+
+```
+启动 → 本地无验证码?
+  ├─ 是 → POST /api/open/distribute
+  │        ├─ ok   → 保存 key → 走正常 /api/validate 校验 → 进入软件
+  │        └─ 失败 → 弹窗让用户手动输入验证码
+  └─ 否 → 正常 /api/validate 校验
+```
+
+> 行为细节:同一机器码重复调用会原样返回已分发的验证码(不会重复发新码);管理员取消/过期该验证码后,校验照常失败——开放模式不影响管理手段;该接口与校验接口共享 IP 限流。
+
+---
+
+## 4. 健康检查(可用于软件端网络探测)
 
 ```
 GET /api/health
@@ -211,4 +250,4 @@ if (data.ok) showAnnouncements(data.data.announcements);
 4. 公告链接必须调用系统默认浏览器打开(见上例),不要在软件内嵌 WebView 加载外链。
 5. 生产环境务必走 HTTPS。
 
-> 管理端接口(生成验证码、发布公告等)需要管理员登录,不对软件端开放,见 [api.md](api.md)。
+> 管理端接口(生成验证码、发布公告、开放模式开关等)需要管理员登录,不对软件端开放,见 [api.md](api.md)。
